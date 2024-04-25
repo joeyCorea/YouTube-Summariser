@@ -6,8 +6,8 @@ And then she issued a challenge to build on her starter code and extend the capa
 
 The code in this repo heavily leaned on Becca's starter code.
 
-For more details, check out
-[Becca's presentation](https://fairylightsai.substack.com/p/youtube-summariser-ai-workshop)
+For more details, check out:    
+[Becca's presentation](https://fairylightsai.substack.com/p/youtube-summariser-ai-workshop)    
 [My walkthrough of my implementation](https://www.youtube.com/watch?v=flr3uQbPqCM)
 
 # What I learned
