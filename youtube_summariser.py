@@ -1,5 +1,3 @@
-from IPython.display import display, Image, Audio
-
 import os
 from datetime import datetime, timedelta
 from isodate import parse_duration
@@ -8,7 +6,6 @@ import base64
 import time
 from datetime import datetime as dt
 import logging
-#TODO: put in propper logging
 
 from openai import OpenAI
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -20,12 +17,9 @@ import pprint
 pp = pprint.PrettyPrinter(indent=2).pprint
 import ipdb
 
-# Create the logger for your application code
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-# Create a custom formatter
+logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# Add a StreamHandler to logger and set the formatter
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
@@ -46,7 +40,6 @@ def download_video_from_youtube(link, fname="tmp_vid.mp4"):
 	"""downloads the video at the link to the directory this notebook is running from."""
 	youtubeObject = YouTube(link)
 	youtubeObject = youtubeObject.streams.get_highest_resolution()
-	#TODO: download the file to the videos/ folder
 	youtubeObject.download(filename=fname)
 	print("Download completed successfully")
 
@@ -103,14 +96,17 @@ def get_video_transcript(video_id):
 	try:
 		transcript_with_timestamps = YouTubeTranscriptApi.get_transcript(video_id)
 	except:
-		#TODO: not great practice to hard-code the flag here.
 		return create_transcript_via_vision(video_id)
 	transcript = ' '.join([t['text'] for t in transcript_with_timestamps])
 	return transcript
 
 def get_videos_from_question(question="", days=365, maxResults=50, limiter=5, allow_shorts=False):
-	#TODO: docstring
-	#TODO: could probably split this up
+	"""
+	Uses the question as a search term to query YouTube API.
+	Then applies filtering on days, duration and user-specified limiter.
+	Returns a list of videos that meet the filtering criteria.
+	"""
+	#TODO: could probably split this up. Possibly each level of filtering? Or just extracting the filtering on date and duration?
 	youtube_client = build('youtube', 'v3', developerKey=youtube_api_key)
 	response = youtube_client.search().list(
 		q=question,
@@ -120,7 +116,6 @@ def get_videos_from_question(question="", days=365, maxResults=50, limiter=5, al
 	).execute()
 	videos = response['items']
 	logger.debug(f"YT client returned {len(videos)} items")
-	
 	# Filter videos from the last 'x' days and get video IDs
 	cutoff_date = datetime.now() - timedelta(days=days)
 	recent_videos = []
@@ -128,7 +123,6 @@ def get_videos_from_question(question="", days=365, maxResults=50, limiter=5, al
 	for video in videos:
 		if datetime.strptime(video['snippet']['publishedAt'], '%Y-%m-%dT%H:%M:%SZ') > cutoff_date:
 			recent_videos.append(video)
-	
 	video_ids = [v['id']['videoId'] for v in recent_videos]
 	# Get video durations
 	response = requests.get(f'https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id={",".join(video_ids)}&key={youtube_api_key}')
@@ -136,17 +130,14 @@ def get_videos_from_question(question="", days=365, maxResults=50, limiter=5, al
 	video_durations = {video['id']: parse_duration(video['contentDetails']['duration']).total_seconds() for video in response.json()['items']}
 	if not allow_shorts:
 		recent_videos = [video for video in recent_videos if video_durations[video['id']['videoId']] > 60]
-
 	logger.debug(f"after filtering on date and duration, have got {len(recent_videos)} items")
 	if len(recent_videos) == 0:
 		logger.debug("No videos to get. Returning empty")
 		return []
-	
 	# trim down the number of results if desired
 	if limiter:
 		if len(recent_videos) > limiter:
 			recent_videos = recent_videos[:limiter]
-
 	for video in recent_videos:
 		final_video = {
 			'video_id': video['id']['videoId'],
@@ -203,26 +194,31 @@ def summarise_transcript(video):
 	return response.choices[0].message.content
 
 def ask_question(question, days, maxResults, limiter, allow_shorts):
-	""""""
+	"""
+	Grabs a list of videos and passes transcripts to ChatGPT to summarise.
+	"""
 	videos = get_videos_from_question(question, days, maxResults, limiter, allow_shorts)
 	if not videos:
 		print("No videos were found. So, there's nothing to summarise.")
 		return
+	print(f"Here are the action points from some of the best that YouTube has to offer on the subject!\n")
 	for video in videos:
 		print(f"Summarised video: {video['title']}")
 		print(summarise_transcript(video))
 		print("")
+	return
 
 if __name__ == "__main__":
-	# limits the number of videos summarised
-	LIMITER = 2
 	# limits search results to the number of days specified. e.g. 365 will get only videos from last 365 days
 	DAYS = 365
+	# the number of results you want to run through the duration filtering. Mainly to save on YouTube API usage.
 	MAXRESULTS = 50
 	# whether you want to allow videos that are fewer than 60 seconds in duration.
 	ALLOW_SHORTS = True
-	#TODO: find why it isn't deleting the source
+	# limits the number of videos summarised. Mainly to save on OpenAI API usage.
+	LIMITER = 2
 	openai_api_key = os.environ['OPEN_AI_KEY']
 	youtube_api_key = os.environ['YOUTUBE_API_KEY']
 	question = input("Hi. Ask me a question and I'll summarise YouTube's best videos on the subject.\n")
+	print("\n")
 	ask_question(question, DAYS, MAXRESULTS, LIMITER, ALLOW_SHORTS)
